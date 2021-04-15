@@ -1,0 +1,516 @@
+---
+title: "Peak detection"
+author: "Pascal Milesi"
+date: "19/03/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# loading libraries. --------------------------------------
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+require(qvalue)
+
+# loading datasets. ---------------------------------------
+setwd( "certain_path" )
+env  = read.table( "name.env.txt", header = F )
+gwas = read.table( file.choose(), header = F )
+list.sign = read.table( file.choose(), header = F ) # list of significant SNPs full dataset. 
+
+# checking. -----------------------------------------------
+head( gwas )
+
+# declaring variables. ------------------------------------
+LG    = gwas$V6 #LG # Linkage groups / Chromosomes
+Scaff = gwas$V3 #Scaffold
+ID    = gwas$V1 
+Pos   = c(1:nrow(gwas))
+vars  = c(2:2) # Column with pvalues or BF
+
+dataf2 = cbind.data.frame( Scaff, Pos, ID, LG, gwas[,vars] )
+
+slw.size       = 300
+smooth.intens  = 0.90
+extens         = "pcaAdapt"
+type           = "Pval" #"BF" # Pval
+proba          = ifelse( type == "BF", 0.95, 0.95 ) # cut-off qvalue 0.1
+
+iter    = 100
+marker  = nrow(gwas)
+sortie  = matrix( NA, length(vars), 1 )
+sortie2 = matrix( NA, nrow(dataf2), length(vars) )
+liss    = matrix( NA, nrow(dataf2), length(vars) )
+
+signals2 = list() 
+length(signals2) = length(vars)
+
+```
+
+
+
+
+## Peak (random)
+
+```{r}
+run = 0
+for( var in c(5:(4+length(vars))) )
+{
+  run = run + 1 
+  y = case_when( 
+    type == "BF" ~ log10( dataf2[,var] ),
+    type == "Pval" ~ -log10(dataf2[,var]),
+    T ~ abs(dataf2[,var])
+    )
+  
+  pval = dataf2[, var]
+  
+  x = dataf2$Pos
+  dataf = cbind.data.frame( LG, x, y, pval )
+  
+  
+  # slw.size = 300 #round(marker*0.005,0)
+  # cut.quantile = 0.95
+  # peak.cut = 1
+  # log10(proba)
+  
+  dens.cut = case_when(
+    type == "BF"   ~ quantile( dataf$y, p = proba ),
+    type == "Pval" ~ quantile( dataf$y, p = proba ),
+    T ~ quantile( abs(dataf2[,var]), p = proba )
+  )
+ 
+  ## computing profile (sliding windows). -------
+  computing.profile = function( y )
+  {
+    profile = array( NA, length(y) )
+    for( i in (slw.size+1):length(y) ){
+      profile[i] = sum( y[(i-slw.size):(i-1)] > dens.cut, na.rm = T )
+      #fen=y[(i-slw.size):(i-1)]
+      #profile[i] = mean( fen[fen > dens.cut], na.rm = T )
+    }
+    #profile[profile==1] = 0
+    return( profile )
+  }
+  
+  randomization = function( a, b )
+  {
+    expPeak = 1:a
+    x = b
+    out = matrix( NA, x, a )
+    for( i in 1:a )
+      out[,i] = dataf$y[ sample(x, replace = F) ]
+    
+    out    = as.data.frame(out)
+    out$LG = dataf$LG
+    out    = out %>% group_by( LG )
+    
+    for( c in 1:iter )
+    {
+      t = out[,c] %>% pull
+      expPeak[c] = max( computing.profile( t ), na.rm = T )
+    }
+    
+    return(expPeak)
+  }
+  
+  expPeak = randomization( iter, marker )
+  
+  #hist(expPeak) #,breaks=iter*0.05)
+  cut.quantile = max(expPeak)
+  
+  
+  #dataf =
+  # cbind.data.frame(LG,x,y,pval) %>%
+  # mutate( y = -log10(pval) )
+  
+  dataf$avg = computing.profile( dataf$y )
+  
+  sortie2[,run] = dataf$avg
+  smoothie      = dataf$avg
+  cut.smoothie  = quantile( smoothie, p = smooth.intens, na.rm = T )
+  smoothie[ smoothie < cut.smoothie ] = 0
+  liss[,run]    =  smoothie
+  
+  ## statistical filtering. ---------------------
+  qq = cut.quantile #dataf %>% pull(avg) %>% quantile( cut.quantile, na.rm = T )
+  .signals  = dataf %>% filter( avg > qq ) %>% pull(x)
+  .dsignals = diff(.signals)
+  
+  signals = NULL
+  i = 1
+  while( i < length(.signals) )
+  {
+    j = i
+    while( j < length(.dsignals) && .dsignals[j] <= slw.size ) j = j + 1
+    
+    signals = c(signals, mean(.signals[i:(j-1)], na.rm = T) %>% round )
+    i = j + 1
+  }
+  
+  signals2[[run]] = signals
+  #signals3<-signals
+  sortie[run,1]   = length(signals)
+  
+  
+  print( paste( round(run/length(vars)*100, 0), " %", sep = "" ) )
+} # end for loop. 
+
+
+colnames(sortie) = c("Random")
+rownames(sortie) = colnames(dataf2)[c(5:(4+length(vars)))]
+
+sortie
+
+colnames(sortie2) = colnames(dataf2)[5:(4+length(vars))]
+rownames(sortie2) = dataf2$ID
+write.table(
+  sortie2,
+  paste( "stat/avg.", extens, proba, ".txt", sep = "" ),
+  col.names = T, row.names = T, quote = F, sep = "\t" )
+
+colnames(liss) = colnames(dataf2)[5:(4+length(vars))]
+rownames(liss) = dataf2$ID
+write.table(
+  liss,
+  paste( "stat/smoothie.", extens, proba, ".txt", sep = "" ),
+  col.names = T, row.names = T, quote = F, sep = "\t" )
+```
+
+
+
+
+## Peak definition and annotation
+
+```{r}
+length(signals2) = length(vars)
+cand    = list()
+cand2   = list()
+sortie5 = list()
+
+run = 0
+for( j in vars )
+{
+  run = run+1
+  
+  if( length(signals2[[run]]) == 0 )
+  {
+    # do nothing. 
+  } else {
+    peaklimit = c()
+    count     = 0
+    
+    for( i in 1:length(signals2[[run]])) )
+    {
+      count = count + 1
+      
+      k = liss[ signals2[[run]][i], run ]
+      j = signals2[[run]][i]
+      
+      while( k > 0 )
+      { 
+        k = liss[j-1, run]
+        j = j - 1
+      }
+      peaklimit[count] = j
+      
+      k = liss[ signals2[[run]][i], run ]
+      j = signals2[[run]][i]
+      
+      while( k > 0 )
+      { 
+        k = liss[j+1, run]
+        j = j + 1
+      }
+      count = count + 1
+      peaklimit[count] = j
+    }
+    
+    # dens.cut<-log10(proba)
+    dens.cut = case_when(
+      type == "BF"   ~ quantile(log10( dataf2[, 4+run]), p = proba ),
+      type == "Pval" ~ quantile( -log10(dataf2[, 4+run]), p = proba ),
+      T ~ quantile( abs(dataf2[, 4+run]), p = proba )
+    )
+
+    sortie4 = matrix( NA, length(signals2[[run]]), 8 )
+    intervals  = c()
+    intervals2 = c()
+    
+    count = 0
+    for( i in seq(1, length(peaklimit), 2) )
+    {
+      count = count + 1
+      temp  = c(peaklimit[i]:peaklimit[i+1])
+      intervals = c(intervals, temp)
+      
+      sortie4[count, 1] = ifelse(
+        type == "BF" || type == "Z",
+        max( dataf2[temp, 4+run] ),
+        min( dataf2[temp, 4+run] )
+      ) 
+      
+      sortie4[count, 2] = ifelse(
+        type == "BF" || type == "Z",
+        temp[ dataf2[temp,4+run] == sortie4[count,1] ],
+        temp[ dataf2[temp,4+run] == sortie4[count,1] ]
+      ) 
+
+      sortie4[count, 3] = min(temp)
+      sortie4[count, 4] = max(temp)
+      sortie4[count, 5] = max(temp) - min(temp)
+      
+      sortie4[count, 6] = case_when(
+        type == "BF" ~ 
+          length(which(log10(dataf2[temp,4+run]) > dens.cut)),
+        type == "Pval" ~ 
+          length(which(-log10(dataf2[temp,4+run]) > dens.cut)),
+        T ~
+          length(which(dataf2[temp,4+run] > dens.cut))
+      )
+      
+      sortie4[count, 7] = case_when(
+        type == "BF" ~
+          length(unique(dataf2$Scaff[which(log10(dataf2[temp,4+run]) > dens.cut)])),
+        type == "Pval" ~
+          length(unique(dataf2$Scaff[which(-log10(dataf2[temp,4+run]) > dens.cut)])),
+        T ~
+          length(unique(dataf2$Scaff[which(dataf2[temp,4+run] > dens.cut)]))
+      ) 
+      
+      sortie4[count, 8] = 
+        length(which(dataf2$ID[temp] %in% list.sign[,run]))
+      
+      if( length(which(dataf2$ID[temp] %in% list.sign[,run])) > 0 )
+        intervals2 = c(intervals2,temp)
+    }
+    
+    sortie4 = unique(sortie4)
+    rownames(sortie4) = dataf2$ID[as.numeric(sortie4[,2])]
+    colnames(sortie4) = c("Min", "Pos", "Start", "End", "Wide", "SNPs", "Scaff", "Sign" )
+    
+    sortie5[[run]] = sortie4
+    cand[[run]]    = unique(intervals)
+    cand2[[run]]   = unique(intervals2)
+  }
+  
+  length(sortie5) = length(vars)
+  length(cand)    = length(vars)
+  length(cand2)   = length(vars)
+}
+```
+
+
+
+
+## List, Stat files and plots
+
+```{r}
+
+gg_color_hue = function(n) 
+{
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+n    = 12
+cols = gg_color_hue(n)
+peakheight = 5
+
+run = 0
+if( type == "BF" | type == "Z" )
+{
+  for( i in vars )
+  {
+    run = run + 1
+    stats = sortie5[[run]]
+    if(length(stats)==0)
+    {
+      # do nothing.
+    } else {
+      write.table(
+        stats,
+        paste( "stat/peak.", extens, ".", colnames(dataf2)[[4+run]], ".", proba, ".txt", sep = "" ),
+        col.names = T, row.names = T, quote = F, sep = "\t" )
+      
+      cut  = proba
+      temp = dataf2[cand[[run]],]
+      
+      list.peak = temp$ID[which(temp[,4+run] > cut)]
+      list_scaff.peak = unique(temp$Scaff[which(temp[,4+run] > cut)])
+      
+      write.table(
+        list.peak,
+        paste( "stat/list.snp.peak.", extens, colnames(dataf2)[4+run], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+      
+      write.table(
+        list_scaff.peak,
+        paste( "stat/list.scaff.peak.", extens, colnames(dataf2)[4+run], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+      
+      
+      pdf(
+        paste( "plot/", extens, colnames(dataf2)[4+run], ".", proba, ".BF.pdf", sep = "" ),
+        width = 10, height = 8 )
+      layout( matrix(c(1,1,1,2,3,3), nrow = 2, byrow = T ) )
+      
+      plot( log10(dataf2[,4+run]),
+            main = colnames(dataf2)[4+run],
+            col  = cols[factor(dataf2$LG)],
+            ylab = "XtX",
+            las  = 1
+            )
+      
+      peakheight = ((max(log10(sortie5[[run]][,1]))-min(log10(sortie5[[run]][,1])))*0.25) / max(sortie2[,run], na.rm = T)
+      
+      points(
+        liss[,run] * peakheight + min(log10(dataf2[,4+run])),
+        type = "l", col = "gray35" )
+      abline( v = c(sortie5[[run]][which(sortie5[[run]][,8] > 0),2]), lty = 4, col = "gray45")
+      
+      hist( dataf2[,4+run], freq = F,
+            xlab = colnames(dataf2)[4+run],
+            las = 1,
+            main = "",
+            col = "white", 
+            border = "white" )
+      lines( density(dataf2[,4+run]), col = "gray35", lwd = 2 )
+      abline( v = proba, lty = 3, col = "red" )
+      
+      plot(
+        log10(sample(dataf2[,4+run],replace=F)),
+        col = cols[factor(dataf2$LG)],
+        ylab = "XtX",
+        main = "random")
+      
+      dev.off()
+    }
+  }
+  
+  
+} else {
+  
+  E = sort(-log10(runif(nrow(dataf2),0,1)))
+  
+  for(i in vars)
+  {
+    run = run + 1
+    stats = sortie5[[run]]
+    
+    if( length(stats) == 0)
+    {
+      # do nothing. 
+    } else {
+      write.table(
+        stats,
+        paste("stat/peak.", extens, ".", colnames(dataf2)[[4+run]], ".", proba, ".txt", sep = "" ),
+        col.names = T, row.names = T, quote = F, sep = "\t" )
+      
+      cut = max(dataf2[which(qvalue(dataf2[,4+run])$qvalue < 0.1), 4+run])
+      
+      temp  = dataf2[cand[[run]],]
+      temp2 = dataf2[cand2[[run]],]
+      list.peak = temp$ID[which(temp[,4+run] < cut)]
+      list_scaff.peak = unique(temp$Scaff[which(temp[,4+run] < cut)])
+      list.peak.test  = temp2$ID
+      list_scaff.peak.test = unique(temp2$Scaff)
+      
+      write.table(
+        list.peak,
+        paste( "stat/list.snp.peak.", extens, colnames(dataf2)[4+run], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+      
+      write.table(
+        list_scaff.peak,
+        paste( "stat/list.scaff.peak.", extens, colnames(dataf2)[4+run], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+      
+      write.table(
+        list_scaff.peak.test,
+        paste( "stat/list.scaff.peak.test.", extens, colnames(dataf2)[4+run], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep="\t" )
+      
+      write.table(
+        test,
+        paste( "stat/random835.test.", extens, colnames(dataf2)[4+run], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+      
+      pdf(
+        paste( "plot/", extens, ".", colnames(dataf2)[4+run], ".", proba, ".qval.pdf", sep = "" ),
+        width = 10, height = 8 )
+      layout( matrix(c(1,1,1,2,3,3), nrow = 2, byrow = T ) )
+      
+      plot(
+        -log10(dataf2[,4+run]),
+        main = colnames(dataf2)[4+run],
+        col  = cols[factor(dataf2$LG)],
+        ylab = "-log10(p.values)",
+        las  = 1
+        )
+      
+      peakheight = (max(-log10(sortie5[[run]][,1]))*0.25)/max(sortie2[,run],na.rm=T)
+      points( liss[,run]*peakheight,
+              type = "l", col = "gray45" )
+      
+      abline( v = c(sortie5[[run]][which(sortie5[[run]][,8] > 0),2]), lty = 4, col = "gray45" )
+      P = sort(-log10(dataf2[,4+run]))
+      
+      plot( P~E,
+            xlab = "Expected p.values",
+            las = 1,
+            ylab = "Observed p.values" )
+      
+      A = seq(0,max(E),0.1)
+      points(A, A, type = "l", col = "red" )
+      
+      plot( -log10(sample(dataf2[,4+run],replace=F)),
+            col = cols[factor(dataf2$LG)],
+            ylab = "-log10(p.values)",
+            main = "random"
+            )
+      dev.off()
+    }
+  }
+}
+
+
+run = 0
+out2 = matrix(NA,length(vars),2)
+for( i in vars )
+{
+  run = run+1
+  out = c(nrow(sortie5[[run]]),
+          nrow(sortie5[[run]][which(sortie5[[run]][,8] >0),]))
+  out2[run,] = out
+}
+
+rownames(out2) = colnames(dataf2)[5:(4+length(vars))]
+colnames(out2) = c("Peaks","Peaks.Sign")
+
+write.table(
+  out2,
+  paste("Bilan.peaks.", extens, ".txt", sep = "" ),
+  col.names = T, row.names = T, quote = T, sep = "\t" )
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
