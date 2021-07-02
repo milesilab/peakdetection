@@ -1,6 +1,6 @@
 ---
 title: "Peak detection"
-author: "Pascal Milesi"
+author: "Mathieu Tiret & Pascal Milesi"
 date: "19/03/2021"
 output: pdf_document
 ---
