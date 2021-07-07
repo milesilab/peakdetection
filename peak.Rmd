@@ -1,59 +1,66 @@
 ---
 title: "Peak detection"
 author: "Mathieu Tiret & Pascal Milesi"
-date: "19/03/2021"
+date: "07/07/2021"
 output: pdf_document
 ---
   
-  ```{r setup, include=FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 # loading libraries. --------------------------------------
-#### faire en sorte que ca installe les packages si absent
+if( !requireNamespace("data.table", quietly = T) )
+  install.packages("data.table")
+if( !requireNamespace("dplyr", quietly = T) )
+  install.packages("dplyr")
+if( !requireNamespace("tidyverse", quietly = T) )
+  install.packages("tidyverse")
+if( !requireNamespace("ggplot2", quietly = T) )
+  install.packages("ggplot2")
+if( !requireNamespace("qvalue", quietly = T) )
+  install.packages("qvalue")
+
 library(data.table)
 library(dplyr)
 library(ggplot2)
 library(tidyverse)
-require(qvalue)
+library(qvalue)
 
 # loading datasets. ---------------------------------------
-setwd( "/Users/pascalmilesi/upp_new/Lili_Pascal/LL_PM/Bayenv2_data/correct_data/bayenv_output/res10mins_MAF05/" )
+output.path = "certain_path"
 gwas = fread( file.choose() ) %>% as_tibble()
-list.sign = read.table( file.choose(), header = F ) # list of significant SNPs full dataset. 
+list.sign = NULL # read.table( file.choose(), header = F ) # list of significant SNPs full dataset. 
 
-# checking. -----------------------------------------------
-head( gwas )
-gwas<-na.omit(gwas)
-colnames(gwas)[2]<-"xtx" # colnames for the different variables to be tested
-colnames(gwas)[3]<-"Scaffold"
-colnames(gwas)[6]<-"LG"
 
 # declaring variables. ------------------------------------
-vars = 2
-
-##### Specifier colonne scaffold, ID, LG
-dataf2 = 
-  gwas %>% 
-  mutate( Scaff = Scaffold, Pos = 1:n(), ID = V1 ) %>% 
-  select( Scaff, Pos, ID, LG, all_of(vars) )
-
+vars = 3
 slw.size       = 300
 smooth.intens  = 0.90
 extens         = "pcaAdapt" ### nom pr output: extens.var.
 type           = "BF" #"Z" # Pval
 proba          = 0.95 # to be specified
-iter    = 1000
+iter           = 1000
 
-liss    = matrix( NA, nrow(dataf2), length(vars) )
-
-signals = list() 
-length(signals) = length(vars)
 
 ```
 
-## Peak (random)
+
+## Peak detection
 
 ```{r}
+
+dataf2 = 
+  gwas %>% 
+  mutate( Scaff = Scaffold, Pos = 1:n(), ID = V1 ) %>% 
+  select( Scaff, Pos, ID, LG, all_of(vars) )
+
+dir.create( output.path %+% "/stat/", showWarnings = F )
+dir.create( output.path %+% "/plot/", showWarnings = F )
+
+liss    = matrix( NA, nrow(dataf2), length(vars) )
+signals = list() 
+length(signals) = length(vars)
+
 ## helping functions. -------------------------------------
 computing.profile = function( y, dens.cut )
 {
@@ -120,8 +127,12 @@ for( var in length(vars) )
     while( j < length(.dsignals) && .dsignals[j] < slw.size ) j = j + 1
     
     impl.signals = 
-      c( impl.signals, dataf %>% slice(.signals[i:(j-1)]) %>% filter(avg==max(avg)) %>% pull(Pos) %>% median() %>% round())
-      # c(impl.signals, mean(.signals[i:(j-1)], na.rm = T)%>% round) #dataf$Pos[.signals[which.max(dataf$avg[.signals[i:(j-1)]])]] ) #mean(.signals[i:(j-1)], na.rm = T)%>% round  
+      c( impl.signals, 
+         dataf %>% 
+           slice( .signals[i:(j-1)] ) %>% # ~ filter( Pos %in% .signals )
+           filter( avg == max(avg) ) %>% 
+           pull(Pos) %>% median() %>% round()
+         )
     i = j + 1
   }
   
@@ -130,17 +141,13 @@ for( var in length(vars) )
   ## displaying. ------------------------------------------
   print( paste( round(var/length(vars)*100, 0), " %", sep = "" ) )
 }
-```
 
 
-
-
-## Peak definition and annotation
-
-```{r}
 peak.annotation = list()
 cand = list()
 cand2 = list()
+snp.sign = list()
+scaff.sign = list()
 
 for( var in seq_along(vars) )
 {
@@ -160,8 +167,8 @@ for( var in seq_along(vars) )
   .peak.annotation = matrix( NA, nrow(peaklimit), 8 )
   intervals  = c()
   intervals2 = c()
-  snp.sign = c()
-  scaff.sign = c()
+  .snp.sign = c()
+  .scaff.sign = c()
   for( i in 1:nrow(peaklimit) )
   {
     interval = peaklimit[i,1]:peaklimit[i,2]
@@ -189,25 +196,23 @@ for( var in seq_along(vars) )
       qpeak = which( -log10(tmp.data) > quantile( dataf$y, p = proba ) )
     
     .peak.annotation[i,6] = length( qpeak )
-    .peak.annotation[i,7] = dataf2 %>% slice(c(.peak.annotation[i,3]:.peak.annotation[i,4])) %>%
-      filter(ID %in% list.sign[,var] ) %>% pull(Scaff) %>% unique %>% length # length(unique(dataf2$ID[which(dataf2$ID[c(.peak.annotation[i,3]:.peak.annotation[i,4])]%in%list.sign[,var]==T)])
+    .peak.annotation[i,7] = 
+      dataf2 %>% 
+      slice(c(.peak.annotation[i,3]:.peak.annotation[i,4])) %>%
+      filter(ID %in% list.sign[,var] ) %>% 
+      pull(Scaff) %>% unique %>% length 
                               
-    .peak.annotation[i,8] = sum(dataf2$ID[c(.peak.annotation[i,3]:.peak.annotation[i,4])]%in%list.sign[,var])# dataf2 %>% filter( ID %in% list.sign[,var] ) %>% nrow()
-    snp.sign<-c(snp.sign, dataf2 %>% slice(c(.peak.annotation[i,3]:.peak.annotation[i,4])) %>%
-      filter(ID %in% list.sign[,var] ) %>% pull(ID))
+    .peak.annotation[i,8] = sum( dataf2$ID[ c(.peak.annotation[i,3]:.peak.annotation[i,4]) ] %in% list.sign[,var])
     
-    scaff.sign<-c(scaff.sign, dataf2 %>% slice(c(.peak.annotation[i,3]:.peak.annotation[i,4])) %>%
-      filter(ID %in% list.sign[,var] ) %>% pull(Scaff))
-   
-     write.table(
-        snp.sign,
-        paste( "stat/list.snp.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
-        col.names = F, row.names = F, quote = F, sep = "\t" )
-      
-      write.table(
-        uniaue(scaff.sign),
-        paste( "stat/list.scaff.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
-        col.names = F, row.names = F, quote = F, sep = "\t" )
+    .snp.sign = c(.snp.sign, 
+                 dataf2 %>%
+                   slice(.peak.annotation[i,3]:.peak.annotation[i,4]) %>%
+                   filter(ID %in% list.sign[,var] ) %>% pull(ID))
+    
+    .scaff.sign = c( .scaff.sign, 
+                     dataf2 %>%
+                       slice(.peak.annotation[i,3]:.peak.annotation[i,4]) %>% 
+                       filter(ID %in% list.sign[,var] ) %>% pull(Scaff))
     
     intervals = c( intervals, peaklimit %>% t %>% c)
     if( dataf2 %>% slice(interval) %>% filter( ID %in% list.sign[,var] ) %>% nrow() > 0 )
@@ -221,15 +226,10 @@ for( var in seq_along(vars) )
   peak.annotation[[var]] = .peak.annotation
   cand[[var]] = unique(intervals)
   cand2[[var]] = unique(intervals2)
+  snp.sign[[var]] = .snp.sign
+  scaff.sign[[var]] = .scaff.sign
 }
-```
 
-
-
-
-## List, Stat files and plots
-
-```{r}
 
 gg_color_hue = function(n) 
 {
@@ -251,11 +251,22 @@ if( type == "BF" || type == "Z" )
     } else {
       write.table(
         stats,
-        paste( "stat/peak.", extens, ".", colnames(dataf2)[[4+var]], ".", proba, ".txt", sep = "" ),
+        paste( output.path %+% "/stat/peak.", extens, ".", colnames(dataf2)[[4+var]], ".", proba, ".txt", sep = "" ),
         col.names = T, row.names = T, quote = F, sep = "\t" )
       
+      
+     write.table(
+        snp.sign[[var]],
+        paste( output.path %+% "/stat/list.snp.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+      
+     write.table(
+        scaff.sign[[var]],
+        paste( output.path %+% "/stat/list.scaff.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+      
       pdf(
-        paste( "plot/", extens, colnames(dataf2)[4+var], ".", proba, ".",type,".pdf", sep = "" ),
+        paste( output.path %+% "/plot/", extens, colnames(dataf2)[4+var], ".", proba, ".",type,".pdf", sep = "" ),
         width = 10, height = 8 )
       layout( matrix(c(1,1,1,2,3,3), nrow = 2, byrow = T ) )
       
@@ -268,9 +279,10 @@ if( type == "BF" || type == "Z" )
       
       peakheight = ((max(log10(peak.annotation[[var]][,1]))-min(log10(peak.annotation[[var]][,1])))*0.25) / max(liss[,var], na.rm = T)
       
-      points(
-        liss[,var] * peakheight + min(log10(dataf2[,4+var])),
-        type = "l", col = "gray35" )
+      lines(
+        1:nrow(liss) - slw.size,
+        liss[,var] * peakheight + min(log10(dataf2[,4+var])), 
+        col = "gray35" )
       abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), lty = 4, col = "gray45")
       
       hist( dataf2[,4+var] %>% pull, freq = F,
@@ -298,10 +310,9 @@ if( type == "BF" || type == "Z" )
   E = sort(-log10(runif(nrow(dataf2),0,1)))
   
   run<-0
-  for(i in vars)
+  for( var in seq_along(vars) )
   {
-    run = run + 1
-    stats = sortie5[[run]]
+    stats = peak.annotation[[var]]
     
     if( length(stats) == 0)
     {
@@ -309,11 +320,22 @@ if( type == "BF" || type == "Z" )
     } else {
       write.table(
         stats,
-        paste("stat/peak.", extens, ".", colnames(dataf2)[[4+var]], ".", proba, ".txt", sep = "" ),
+        paste( output.path %+% "/stat/peak.", extens, ".", colnames(dataf2)[[4+var]], ".", proba, ".txt", sep = "" ),
         col.names = T, row.names = T, quote = F, sep = "\t" )
       
+      
+     write.table(
+        snp.sign[[var]],
+        paste( output.path %+% "/stat/list.snp.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+      
+     write.table(
+        scaff.sign[[var]],
+        paste( output.path %+% "/stat/list.scaff.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
+        col.names = F, row.names = F, quote = F, sep = "\t" )
+     
       pdf(
-        paste( "plot/", extens, ".", colnames(dataf2)[4+var], ".", proba, ".qval.pdf", sep = "" ),
+        paste( output.path %+% "/plot/", extens, ".", colnames(dataf2)[4+var], ".", proba, ".qval.pdf", sep = "" ),
         width = 10, height = 8 )
       layout( matrix(c(1,1,1,2,3,3), nrow = 2, byrow = T ) )
       
@@ -352,10 +374,8 @@ if( type == "BF" || type == "Z" )
 
 
 out2 = matrix(NA,length(vars),2)
-run<-0
 for( i in seq_along(vars) )
 {
-  run = run+1
   out = c(nrow(peak.annotation[[var]]),
           nrow(peak.annotation[[var]][which(peak.annotation[[var]][,8] >0),]))
   out2[var,] = out
@@ -366,7 +386,7 @@ colnames(out2) = c("Peaks","Peaks.Sign")
 
 write.table(
   out2,
-  paste("Bilan.peaks.", extens, ".txt", sep = "" ),
+  paste(output.path %+% "/Bilan.peaks.", extens, ".txt", sep = "" ),
   col.names = T, row.names = T, quote = T, sep = "\t" )
 
 ```
