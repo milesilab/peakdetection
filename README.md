@@ -36,6 +36,6 @@ The outputs are being saved in the stat/ and plot/. The main output is stat/peak
 
 ## How to cite
 
-Statistical peak detection for GWAS, DOI: 10.5281/zenodo.5079556.
+Tiret M., Milesi P., 2021. Statistical peak detection for GWAS, DOI: 10.5281/zenodo.5079556.
 
 
