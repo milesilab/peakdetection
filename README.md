@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5079556.svg)](https://doi.org/10.5281/zenodo.5079556)
+
 # Peakdetection
 
 **Peakdetection** will automatically detect peaks in a GWAS (BayesFactor or p-values) based on the quantiles of the profile.  
@@ -31,3 +33,9 @@ The outputs are being saved in the stat/ and plot/. The main output is stat/peak
 - SNPs: the number of SNPs within the peak that is in the 95% most significant SNPs overall. 
 - Genes: the number of genes across which the peak spans. 
 - Sign: the number significant SNPs (from list.sign) contained in the peak. 
+
+## How to cite
+
+Statistical peak detection for GWAS, DOI: 10.5281/zenodo.5079556.
+
+
