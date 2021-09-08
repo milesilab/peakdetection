@@ -27,8 +27,8 @@ library(tidyverse)
 library(qvalue)
 
 # loading datasets. ---------------------------------------
-input.path="~/Desktop/PNAS_last/Data/" ####################
-output.path = "~/Desktop/PNAS_last/Data/Bayenv/"
+input.path = "." ####################
+output.path = "./Bayenv/"
 dir.create(output.path) ####################
 dir.create(paste(output.path,"stats/",sep=""))####################
 dir.create(paste(output.path,"plots/",sep=""))####################
@@ -40,8 +40,7 @@ list.sign = read.table( file.choose(), header = T )#NULL # read.table( file.choo
 head(list.sign)####################
 #colnames(gwas)
 # declaring variables. ------------------------------------
-vars = seq(3,74,3)
-colnames(gwas)[vars]<-colnames(list.sign)
+vars = 1 # name or number of the columns to be tested. 
 slw.size       = 300
 smooth.intens  = 0.90
 extens         = "Bayenv" ### nom pr output: extens.var.
