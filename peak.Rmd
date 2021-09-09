@@ -361,21 +361,31 @@ if( type == "BF" || type == "Z" )
         width = 10, height = 8 )
       layout( matrix(c(1,1,1,2,3,3), nrow = 2, byrow = T ) )
       
-      plot(
-        -log10(dataf2[,4+var] %>% pull),
-        main = colnames(dataf2)[4+var],
-        col  = cols[factor(dataf2$LG)],
-        ylab = "-log10(p.values)",
-        las  = 1
+      plot( -log10(dataf2[,4+var] %>% pull),
+            main = colnames(dataf2)[4+var],
+            col  = cols[factor(dataf2$LG)],
+            ylab = "-log10(p.values)",
+            pch = 20, 
+            las  = 1
       )
+
+      peakheight = ((max(-log10(peak.annotation[[var]][,1]))-min(-log10(peak.annotation[[var]][,1])))*0.25) / max(liss[,var], na.rm = T) * 1.5
+
+      lines(
+        1:nrow(liss) - slw.size/2,
+        liss[,var] * peakheight + min(-log10(dataf2[,4+var])), 
+        col = "gray35" )
+
+      abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), col = ("red"), lty = 2, lwd = 1.5 )
+      segments( 
+        x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
+        y0 = min(log10(dataf2[,4+var])), 
+        y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
+        col = "gray45", lty = 4)
+        
       
-      peakheight = (max(-log10(peak.annotation[[var]][,1]))*0.25)/max(liss[,var],na.rm=T)
-      points( liss[,var]*peakheight,
-              type = "l", col = "gray45" )
       
-      abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), lty = 4, col = "gray45" )
       P = sort(-log10(dataf2[,4+var] %>% pull))
-      
       plot( P~E,
             xlab = "Expected p.values",
             las = 1,
