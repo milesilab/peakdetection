@@ -19,12 +19,15 @@ if( !requireNamespace("ggplot2", quietly = T) )
   install.packages("ggplot2")
 if( !requireNamespace("qvalue", quietly = T) )
   install.packages("qvalue")
+if( !requireNamespace("scales", quietly = T) )
+  install.packages("scales")
 
 library(data.table)
 library(dplyr)
 library(ggplot2)
 library(tidyverse)
 library(qvalue)
+library(scales)
 
 # loading datasets. ---------------------------------------
 input.path = "." ####################
@@ -59,7 +62,8 @@ iter           = 10000
 dataf2 = 
   gwas %>% 
   mutate( Scaff = Scaffold, Pos = 1:n(), ID = ID ) %>% 
-  select( Scaff, Pos, ID, LG, all_of(vars) )
+  select( Scaff, Pos, ID, LG, all_of(vars) ) %>%
+  filter( !is.na(LG) )
 
 #dir.create( output.path %+% "/stat/", showWarnings = F ) ####################
 #dir.create( output.path %+% "/plot/", showWarnings = F ) ####################
@@ -282,24 +286,34 @@ if( type == "BF" || type == "Z" )
             main = colnames(dataf2)[4+var],
             col  = cols[factor(dataf2$LG)],
             ylab = colnames(dataf2)[4+var],
+            pch = 20, 
             las  = 1
       )
-      
-      peakheight = ((max(log10(peak.annotation[[var]][,1]))-min(log10(peak.annotation[[var]][,1])))*0.25) / max(liss[,var], na.rm = T)
-      
+
+      peakheight = ((max(log10(peak.annotation[[var]][,1]))-min(log10(peak.annotation[[var]][,1])))*0.25) / max(liss[,var], na.rm = T) * 1.5
+
       lines(
         1:nrow(liss) - slw.size/2,
         liss[,var] * peakheight + min(log10(dataf2[,4+var])), 
         col = "gray35" )
-      abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), lty = 4, col = "gray45")
+
+      abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), col = ("red"), lty = 2, lwd = 1.5 )
+      segments( 
+        x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
+        y0 = min(log10(dataf2[,4+var])), 
+        y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
+        col = "gray45", lty = 4)
       
-      hist( dataf2[,4+var] %>% pull, freq = F,
+      
+      pdensity = log10(dataf2[,4+var] %>% pull)
+      hist( pdensity, freq = F,
             xlab = colnames(dataf2)[4+var],
             las = 1,
             main = "",
             col = "white", 
-            border = "white" )
-      lines( density(dataf2[,4+var] %>% pull), col = "gray35", lwd = 2 )
+            border = "white",
+            ylim = c(0, max(pdensity) ) )
+      lines( density(pdensity), col = "gray35", lwd = 2 )
       abline( v = proba, lty = 3, col = "red" )
       
       plot(
@@ -385,7 +399,7 @@ out2 = matrix(NA,length(vars),2)
 for( var in seq_along(vars) ) #############
 {
   out = c(nrow(peak.annotation[[var]]),
-          nrow(peak.annotation[[var]][which(peak.annotation[[var]][,8] >0),]))
+          length(unique(peak.annotation[[var]][which(peak.annotation[[var]][,8] >0),2])))
   out2[var,] = out
 }
 
