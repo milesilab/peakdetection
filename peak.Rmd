@@ -312,7 +312,7 @@ if( type == "BF" || type == "Z" )
             main = "",
             col = "white", 
             border = "white",
-            ylim = c(0, max(pdensity) ) )
+            ylim = c(0, max(density(pdensity)$y)) ) 
       lines( density(pdensity), col = "gray35", lwd = 2 )
       abline( v = proba, lty = 3, col = "red" )
       
