@@ -31,7 +31,7 @@ library(scales)
 
 # loading datasets. ---------------------------------------
 input.path = "." ####################
-output.path = "./Bayenv/"
+output.path = "."
 dir.create(output.path) ####################
 dir.create(paste(output.path,"stats/",sep=""))####################
 dir.create(paste(output.path,"plots/",sep=""))####################
@@ -46,7 +46,7 @@ head(list.sign)####################
 vars = 1 # name or number of the columns to be tested. 
 slw.size       = 300
 smooth.intens  = 0.90
-extens         = "Bayenv" ### nom pr output: extens.var.
+extens         = "." ### nom pr output: extens.var.
 type           = "BF" #"Z" # Pval
 proba          = 0.95 # to be specified
 iter           = 10000
