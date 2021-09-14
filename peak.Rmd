@@ -298,11 +298,12 @@ if( type == "BF" || type == "Z" )
         col = "gray35" )
 
       abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), col = ("red"), lty = 2, lwd = 1.5 )
-      segments( 
-        x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
-        y0 = min(log10(dataf2[,4+var])), 
-        y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
-        col = "gray45", lty = 4)
+      if( length(peak.annotation[[var]][,8]) > 0 )
+        segments( 
+          x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
+          y0 = min(log10(dataf2[,4+var])), 
+          y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
+          col = "gray45", lty = 4)
       
       
       pdensity = log10(dataf2[,4+var] %>% pull)
@@ -377,11 +378,12 @@ if( type == "BF" || type == "Z" )
         col = "gray35" )
 
       abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), col = ("red"), lty = 2, lwd = 1.5 )
-      segments( 
-        x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
-        y0 = min(log10(dataf2[,4+var])), 
-        y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
-        col = "gray45", lty = 4)
+      if( length(peak.annotation[[var]][,8]) > 0 )
+        segments( 
+          x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
+          y0 = min(log10(dataf2[,4+var])), 
+          y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
+          col = "gray45", lty = 4)
         
       
       
