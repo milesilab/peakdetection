@@ -1,7 +1,7 @@
 ---
 title: "Peak detection"
 author: "Mathieu Tiret & Pascal Milesi"
-date: "08/09/2021"
+date: "16/09/2021"
 output: pdf_document
 ---
   
@@ -30,28 +30,28 @@ library(qvalue)
 library(scales)
 
 # loading datasets. ---------------------------------------
-input.path = "." ####################
+input.path = "." 
 output.path = "."
-dir.create(output.path) ####################
-dir.create(paste(output.path,"stats/",sep=""))####################
-dir.create(paste(output.path,"plots/",sep=""))####################
+dir.create(output.path) 
+dir.create(paste(output.path,"stats/",sep=""))
+dir.create(paste(output.path,"plots/",sep=""))
 setwd(input.path)
-gwas = fread( file.choose() ) %>% as_tibble() ####################
-head(gwas)####################
+gwas = fread( file.choose() ) %>% as_tibble() # input dataset containing the statistics to be tested (one column per variable).
 
-list.sign = read.table( file.choose(), header = T )#NULL # read.table( file.choose(), header = F ) # list of significant SNPs full dataset. 
-head(list.sign)####################
-#colnames(gwas)
+head(gwas)
+
+list.sign = read.table( file.choose(), header = T ) # Lists of significant SNPs (one columns per variable); can be NULL if not needed. 
+
+head(list.sign)
+
 # declaring variables. ------------------------------------
-vars = 1 # name or number of the columns to be tested. 
-slw.size       = 300
-smooth.intens  = 0.90
-extens         = "." ### nom pr output: extens.var.
-type           = "BF" #"Z" # Pval
-proba          = 0.95 # to be specified
-iter           = 10000
-
-
+vars =  # name or column numbers of the variables to be tested. 
+slw.size       = 300 # Size of the sliding of the windows 
+smooth.intens  = 0.90 # Smoothing intensity for start - end peak definition
+extens         = "lfmm" # Extension for output filename  
+type           = "Pval" # Type of statistique to work with (any of "BF" for Bayes Factor,"Z" for Z-scores, "Pval" for p.values)
+proba          = 0.95 # 0.95 means top 5% of the statistics to be tested
+iter           = 10000 # Number of iterations for the randomization process, should be >1000.
 ```
 
 
@@ -64,9 +64,6 @@ dataf2 =
   mutate( Scaff = Scaffold, Pos = 1:n(), ID = ID ) %>% 
   select( Scaff, Pos, ID, LG, all_of(vars) ) %>%
   filter( !is.na(LG) )
-
-#dir.create( output.path %+% "/stat/", showWarnings = F ) ####################
-#dir.create( output.path %+% "/plot/", showWarnings = F ) ####################
 
 liss    = matrix( NA, nrow(dataf2), length(vars) )
 signals = list() 
@@ -140,7 +137,7 @@ for( var in seq_along(vars) ) ####################
     impl.signals = 
       c( impl.signals, 
          dataf %>% 
-           slice( .signals[i:(j-1)] ) %>% # ~ filter( Pos %in% .signals )
+           slice( .signals[i:(j-1)] ) %>% 
            filter( avg == max(avg) ) %>% 
            pull(Pos) %>% median() %>% round()
          )
@@ -163,6 +160,7 @@ scaff.sign = list()
 for( var in seq_along(vars) )
 {
   # computing the peak limits. ------------------
+  if(length(signals[[var]]) > 0){
   peaklimit = array(NA, c( length(signals[[var]]), 2 ) )
   for( i in seq_along(signals[[var]]) )
   {
@@ -211,7 +209,7 @@ for( var in seq_along(vars) )
     .peak.annotation[i,6] = length( qpeak )
     .peak.annotation[i,7] = 
       dataf2 %>% 
-      slice(c(.peak.annotation[i,3]:.peak.annotation[i,4])) %>% #################
+      slice(c(.peak.annotation[i,3]:.peak.annotation[i,4])) %>% 
       pull(Scaff) %>% unique %>% length 
                               
     .peak.annotation[i,8] = sum( dataf2$ID[ c(.peak.annotation[i,3]:.peak.annotation[i,4]) ] %in% list.sign[,var])
@@ -240,8 +238,14 @@ for( var in seq_along(vars) )
   cand2[[var]] = unique(intervals2)
   snp.sign[[var]] = .snp.sign
   scaff.sign[[var]] = .scaff.sign
+} else{
+  peak.annotation[[var]] = rep(NA,8)
+  cand[[var]] = NA
+  cand2[[var]] = NA
+  snp.sign[[var]] = NA
+  scaff.sign[[var]] = NA
+ }
 }
-
 
 gg_color_hue = function(n) 
 {
@@ -264,22 +268,21 @@ if( type == "BF" || type == "Z" )
       write.table(
         stats,
         paste( output.path,"/stats/peak.", extens, ".", colnames(dataf2)[[4+var]], ".", proba, ".txt", sep = "" ),
-        col.names = T, row.names = T, quote = F, sep = "\t" ) ####################
-      
+        col.names = T, row.names = T, quote = F, sep = "\t" ) 
       
      write.table(
         snp.sign[[var]],
         paste( output.path, "/stats/list.snp.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
-        col.names = F, row.names = F, quote = F, sep = "\t" ) ####################
+        col.names = F, row.names = F, quote = F, sep = "\t" ) 
       
      write.table(
         scaff.sign[[var]],
         paste( output.path, "/stats/list.scaff.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
-        col.names = F, row.names = F, quote = F, sep = "\t" ) ####################
+        col.names = F, row.names = F, quote = F, sep = "\t" ) 
       
       pdf(
         paste( output.path, "/plots/", extens, colnames(dataf2)[4+var], ".", proba, ".",type,".pdf", sep = "" ),
-        width = 10, height = 8 ) ####################
+        width = 10, height = 8 ) 
       layout( matrix(c(1,1,1,2,3,3), nrow = 2, byrow = T ) )
       
       plot( log10(dataf2[,4+var] %>% pull),
@@ -290,6 +293,7 @@ if( type == "BF" || type == "Z" )
             las  = 1
       )
 
+    if(is.na(sum(peak.annotation[[var]]))==F){
       peakheight = ((max(log10(peak.annotation[[var]][,1]))-min(log10(peak.annotation[[var]][,1])))*0.25) / max(liss[,var], na.rm = T) * 1.5
 
       lines(
@@ -298,14 +302,13 @@ if( type == "BF" || type == "Z" )
         col = "gray35" )
 
       abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), col = ("red"), lty = 2, lwd = 1.5 )
-      if( length(peak.annotation[[var]][,8]) > 0 )
-        segments( 
-          x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
-          y0 = min(log10(dataf2[,4+var])), 
-          y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
-          col = "gray45", lty = 4)
+      segments( 
+        x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
+        y0 = min(log10(dataf2[,4+var])), 
+        y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
+        col = "gray45", lty = 4)
       
-      
+    }
       pdensity = log10(dataf2[,4+var] %>% pull)
       hist( pdensity, freq = F,
             xlab = colnames(dataf2)[4+var],
@@ -343,25 +346,26 @@ if( type == "BF" || type == "Z" )
     } else {
       write.table(
         stats,
-        paste( output.path , "/stat/peak.", extens, ".", colnames(dataf2)[[4+var]], ".", proba, ".txt", sep = "" ),
+        paste( output.path , "/stats/peak.", extens, ".", colnames(dataf2)[[4+var]], ".", proba, ".txt", sep = "" ),
         col.names = T, row.names = T, quote = F, sep = "\t" )
       
       
      write.table(
         snp.sign[[var]],
-        paste( output.path , "/stat/list.snp.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
+        paste( output.path , "/stats/list.snp.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
         col.names = F, row.names = F, quote = F, sep = "\t" )
       
      write.table(
         scaff.sign[[var]],
-        paste( output.path , "/stat/list.scaff.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
+        paste( output.path , "stats/list.scaff.peak.", extens, colnames(dataf2)[4+var], ".", proba, ".txt", sep = "" ),
         col.names = F, row.names = F, quote = F, sep = "\t" )
      
       pdf(
-        paste( output.path , "/plot/", extens, ".", colnames(dataf2)[4+var], ".", proba, ".qval.pdf", sep = "" ),
+        paste( output.path , "/plots/", extens, ".", colnames(dataf2)[4+var], ".", proba, ".qval.pdf", sep = "" ),
         width = 10, height = 8 )
       layout( matrix(c(1,1,1,2,3,3), nrow = 2, byrow = T ) )
-      
+
+    if(length(peak.annotation[[var]][which(peak.annotation[[var]][,8] ==0 )])){
       plot( -log10(dataf2[,4+var] %>% pull),
             main = colnames(dataf2)[4+var],
             col  = cols[factor(dataf2$LG)],
@@ -369,7 +373,34 @@ if( type == "BF" || type == "Z" )
             pch = 20, 
             las  = 1
       )
+       if(is.na(sum(peak.annotation[[var]]))==F){
+        peakheight = ((max(-log10(peak.annotation[[var]][,1])) - min(-log10(peak.annotation[[var]][,1])))*0.25) / max(liss[,var], na.rm = T) * 1.5
 
+       lines(
+         1:nrow(liss) - slw.size/2,
+         liss[,var] * peakheight + min(-log10(dataf2[,4+var])), 
+         col = "gray35" 
+         )
+
+       abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), col = ("red"), lty = 2, lwd = 1.5 )
+      
+        segments( 
+         x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
+         y0 = min(-log10(dataf2[,4+var])), 
+         y1 = -log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
+         col = "gray45", lty = 4)
+        }
+      }else {
+          plot( -log10(dataf2[,4+var] %>% pull),
+            main = colnames(dataf2)[4+var],
+            col  = cols[factor(dataf2$LG)],
+            ylab = "-log10(p.values)",
+            pch = 20, 
+            las  = 1
+      )
+      
+        if(is.na(sum(peak.annotation[[var]]))==F){
+      
       peakheight = ((max(-log10(peak.annotation[[var]][,1]))-min(-log10(peak.annotation[[var]][,1])))*0.25) / max(liss[,var], na.rm = T) * 1.5
 
       lines(
@@ -378,13 +409,8 @@ if( type == "BF" || type == "Z" )
         col = "gray35" )
 
       abline( v = c(peak.annotation[[var]][which(peak.annotation[[var]][,8] > 0),2]), col = ("red"), lty = 2, lwd = 1.5 )
-      if( length(peak.annotation[[var]][,8]) > 0 )
-        segments( 
-          x0 = peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),2], 
-          y0 = min(log10(dataf2[,4+var])), 
-          y1 = log10(peak.annotation[[var]][which(peak.annotation[[var]][,8] == 0),1]), 
-          col = "gray45", lty = 4)
-        
+        }
+      }
       
       
       P = sort(-log10(dataf2[,4+var] %>% pull))
@@ -395,6 +421,8 @@ if( type == "BF" || type == "Z" )
       
       A = seq(0,max(E),0.1)
       points(A, A, type = "l", col = "red" )
+      points(median(E),median(E),lwd = 1,cex = 1.5,col="red")
+      points(median(-log10(dataf2[,4+var] %>% pull)),median(E),lwd = 1,col="red",pch =3,cex = 1.5)
       
       plot( -log10(sample(dataf2[,4+var] %>% pull,replace=F)),
             col = cols[factor(dataf2$LG)],
@@ -408,7 +436,7 @@ if( type == "BF" || type == "Z" )
 
 
 out2 = matrix(NA,length(vars),2)
-for( var in seq_along(vars) ) #############
+for( var in seq_along(vars) ) 
 {
   out = c(nrow(peak.annotation[[var]]),
           length(unique(peak.annotation[[var]][which(peak.annotation[[var]][,8] >0),2])))
