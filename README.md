@@ -34,6 +34,8 @@ The outputs are being saved in the stat/ and plot/. The main output is stat/peak
 - Genes: the number of genes across which the peak spans. 
 - Sign: the number significant SNPs (from list.sign) contained in the peak. 
 
+In the QQ plot, red circle indicates the expected median, and the red cross indicates the observed median. If both are in the same place, population structure has been correctly taken into account. The red line is with significant SNPs, and the dotted line without significant SNPs. 
+
 ## How to cite
 
 Tiret M., Milesi P., 2021. Statistical peak detection for GWAS, DOI: 10.5281/zenodo.5079556.
